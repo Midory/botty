@@ -25,10 +25,11 @@ class Sorceress(IChar):
             wait(0.1, 0.13)
             mouse.click(button="right")
             wait(self._cast_duration)
-        keyboard.send(self._skill_hotkeys["frozen_armor"])
-        wait(0.1, 0.13)
-        mouse.click(button="right")
-        wait(self._cast_duration)
+        if self._char_config["frozen_armor_available"]:
+            keyboard.send(self._skill_hotkeys["frozen_armor"])
+            wait(0.1, 0.13)
+            mouse.click(button="right")
+            wait(self._cast_duration)
         if self._char_config["cta_available"]:
             self._pre_buff_cta()
 
