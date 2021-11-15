@@ -59,6 +59,7 @@ class Config:
             "potion4": self._select_val("char", "potion4"),
             "es_available": bool(int(self._select_val("char", "es_available"))),
             "cta_available": bool(int(self._select_val("char", "cta_available"))),
+            "frozen_armor_available": bool(int(self._select_val("char", "frozen_armor_available"))),            
             "weapon_switch": self._select_val("char", "weapon_switch"),
             "battle_orders": self._select_val("char", "battle_orders"),
             "battle_command": self._select_val("char", "battle_command"),
