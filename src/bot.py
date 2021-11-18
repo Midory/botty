@@ -14,7 +14,7 @@ from health_manager import HealthManager
 from death_manager import DeathManager
 from npc_manager import NpcManager, Npc
 from pickit import PickIt
-from utils.misc import wait, send_discord
+from utils.misc import kill_thread, wait
 import keyboard
 import threading
 import time
@@ -56,6 +56,10 @@ class Bot:
         self._curr_location: Location = None
         self._timer = None
         self._tps_left = 20
+        self._pre_buffed = 0
+        self._stopping = False
+        self._pausing = False
+        self._current_threads = []
 
         self._states=['hero_selection', 'a5_town', 'pindle', 'shenk']
         self._transitions = [
@@ -80,6 +84,28 @@ class Bot:
     def start(self):
         self.trigger('create_game')
 
+    def stop(self):
+        self._stopping = True
+        for t in self._current_threads:
+            kill_thread(t)
+
+    def toggle_pause(self):
+        self._pausing = not self._pausing
+        Logger.info(f"Pause at next state change...") if self._pausing else Logger.info(f"Resume")
+
+    def trigger_or_stop(self, name: str):
+        if self._pausing:
+            Logger.info("Botty is now pausing")
+        while self._pausing:
+            time.sleep(0.2)
+        if not self._stopping:
+            self.trigger(name)
+
+    def current_game_length(self):
+        if self._timer is None:
+            return 0
+        return time.time() - self._timer
+
     def shuffle_runs(self):
         tmp = list(self._do_runs.items())
         random.shuffle(tmp)
@@ -101,23 +127,16 @@ class Bot:
                 wait(delay, delay + 5.0)
         Logger.info("Start new game")
         self._timer = time.time()
-        found, _ = self._template_finder.search_and_wait("D2_LOGO_HS", time_out=70)
-        if not found:
-            Logger.error("Something went wrong here, bot is unsure about current location. Closing down bot.")
-            if self._config.general["custom_discord_hook"] != "":
-                send_discord_thread = threading.Thread(target=send_discord, args=("Botty got stuck and can not resume", self._config.general["custom_discord_hook"]))
-                send_discord_thread.daemon = True
-                send_discord_thread.start()
-            self._ui_manager.save_and_exit()
-            os._exit(1)
+        self._template_finder.search_and_wait("D2_LOGO_HS")
         self._ui_manager.start_game()
-        self._template_finder.search_and_wait("A5_TOWN_1")
+        self._template_finder.search_and_wait(["A5_TOWN_1", "A5_TOWN_0"])
         self._tp_is_up = False
         self._curr_location = Location.A5_TOWN_START
         # Make sure these keys are released
         keyboard.release(self._config.char["stand_still"])
+        wait(0.05, 0.15)
         keyboard.release(self._config.char["show_items"])
-        self.trigger("maintenance")
+        self.trigger_or_stop("maintenance")
 
     def on_maintenance(self):
         time.sleep(0.6)
@@ -136,12 +155,12 @@ class Bot:
         if not self._tp_is_up and (self._health_manager.get_health(img) < 0.6 or self._health_manager.get_mana(img) < 0.3):
             Logger.info("Need some healing first. Go talk to Malah")
             if not self._pather.traverse_nodes(self._curr_location, Location.MALAH, self._char): 
-                self.trigger("end_game")
+                self.trigger_or_stop("end_game")
                 return
             self._curr_location = Location.MALAH
             self._npc_manager.open_npc_menu(Npc.MALAH)
             if not self._pather.traverse_nodes(self._curr_location, Location.A5_TOWN_START, self._char):
-                self.trigger("end_game")
+                self.trigger_or_stop("end_game")
                 return
             self._curr_location = Location.A5_TOWN_START
 
@@ -149,7 +168,7 @@ class Bot:
         if self._picked_up_items:
             Logger.info("Stashing picked up items")
             if not self._pather.traverse_nodes(self._curr_location, Location.A5_STASH, self._char):
-                self.trigger("end_game")
+                self.trigger_or_stop("end_game")
                 return
             self._curr_location = Location.A5_STASH
             time.sleep(1.5)
@@ -166,12 +185,14 @@ class Bot:
         if self._tps_left < 4:
             Logger.info("Repairing and buying tps at Lazurk")
             if not self._pather.traverse_nodes(self._curr_location, Location.LARZUK, self._char):
-                self.trigger("end_game")
+                self.trigger_or_stop("end_game")
                 return
             self._curr_location = Location.LARZUK
             self._npc_manager.open_npc_menu(Npc.LARZUK)
             self._npc_manager.press_npc_btn(Npc.LARZUK, "trade_repair")
-            if self._ui_manager.repair_and_fill_up_tp(close_when_done=True):
+            if self._ui_manager.repair_and_fill_up_tp():
+                wait(0.1, 0.2)
+                self._ui_manager.close_vendor_screen()
                 self._tps_left = 20
             wait(0.8)
 
@@ -180,7 +201,7 @@ class Bot:
         if not merc_alive:
             Logger.info("Reviveing merc")
             if not self._pather.traverse_nodes(self._curr_location, Location.QUAL_KEHK, self._char):
-                self.trigger("end_game")
+                self.trigger_or_stop("end_game")
                 return
             self._curr_location = Location.QUAL_KEHK
             if self._npc_manager.open_npc_menu(Npc.QUAL_KEHK):
@@ -191,22 +212,25 @@ class Bot:
         started_run = False
         for key in self._do_runs:
             if self._do_runs[key]:
-                self.trigger(key)
+                self.trigger_or_stop(key)
                 started_run = True
                 break
         if not started_run:
-            self.trigger("end_game")
+            self.trigger_or_stop("end_game")
 
     def _start_run(self, key, run):
         Logger.info(f"{key}")
         self._do_runs[key] = False
         run_thread = threading.Thread(target=run.doit, args=(self,))
         run_thread.start()
+        self._current_threads.append(run_thread)
         # Set up monitoring
         health_monitor_thread = threading.Thread(target=self._health_manager.start_monitor, args=(run_thread,))
         health_monitor_thread.start()
+        self._current_threads.append(health_monitor_thread)
         death_monitor_thread = threading.Thread(target=self._death_manager.start_monitor, args=(run_thread,))
         death_monitor_thread.start()
+        self._current_threads.append(death_monitor_thread)
         run_thread.join()
         # Run done, lets stop health monitoring and death monitoring
         self._health_manager.stop_monitor()
@@ -218,10 +242,11 @@ class Bot:
         self._death_manager.stop_monitor()
         death_monitor_thread.join()
 
+        self._current_threads = []
         if self._death_manager.died() or self._health_manager.did_chicken() or self.is_last_run() or not run.success:
-            self.trigger("end_game")
+            self.trigger_or_stop("end_game")
         else:
-            self.trigger("end_run")
+            self.trigger_or_stop("end_run")
 
     def on_run_pindle(self):
         class RunPindle:
@@ -234,13 +259,16 @@ class Bot:
                 bot._curr_location = Location.NIHLATHAK_PORTAL
                 wait(0.2, 0.4)
                 self.success &= bot._char.select_by_template("A5_RED_PORTAL")
-                self.success &= bot._template_finder.search_and_wait("PINDLE_0", time_out=20)[0]
+                time.sleep(0.5)
+                self.success &= bot._template_finder.search_and_wait(["PINDLE_0", "PINDLE_1"], threshold=0.65, time_out=20)[0]
                 if not self.success:
                     return
-                bot._char.pre_buff()
+                if not bot._pre_buffed:
+                    bot._char.pre_buff()
+                    bot._pre_buffed = 1
                 wait(0.2, 0.3)
                 if bot._config.char["static_path_pindle"]:
-                    bot._pather.traverse_nodes_fixed("PINDLE_SAVE_DIST", bot._char)
+                    bot._pather.traverse_nodes_fixed("pindle_save_dist", bot._char)
                 else:
                     bot._pather.traverse_nodes(Location.PINDLE_START, Location.PINDLE_SAVE_DIST, bot._char)
                 bot._char.kill_pindle()
@@ -248,7 +276,7 @@ class Bot:
                 bot._picked_up_items = bot._pickit.pick_up_items(bot._char)
                 # in order to move away for items to have a clear tp, move to the end of the hall
                 if not bot.is_last_run():
-                    bot._pather.traverse_nodes_fixed("PINDLE_SAVE_TP", bot._char)
+                    bot._pather.traverse_nodes_fixed("pindle_save_tp", bot._char)
                 wait(0.2, 0.3)
                 self.success = True
                 return
@@ -268,21 +296,24 @@ class Bot:
                 bot._char.select_by_template("A5_WP")
                 wait(1.0)
                 bot._ui_manager.use_wp(4, 1)
-                self.success = bot._template_finder.search_and_wait("ELDRITCH_0", time_out=20)[0]
+                time.sleep(0.5)
+                self.success = bot._template_finder.search_and_wait(["ELDRITCH_0", "ELDRITCH_1"], threshold=0.65, time_out=20)[0]
                 if not self.success:
                     return
-                bot._char.pre_buff()
+                if not bot._pre_buffed:
+                    bot._char.pre_buff()
+                    bot._pre_buffed = 1
                 wait(0.2, 0.3)
                 # eldritch
                 if bot._config.char["static_path_eldritch"]:
-                    bot._pather.traverse_nodes_fixed("ELDRITCH_SAVE_DIST", bot._char)
+                    bot._pather.traverse_nodes_fixed("eldritch_save_dist", bot._char)
                 else:
                     bot._pather.traverse_nodes(Location.ELDRITCH_START, Location.ELDRITCH_SAVE_DIST, bot._char)
                 bot._char.kill_eldritch()
                 wait(0.4)
                 bot._picked_up_items = bot._pickit.pick_up_items(bot._char)
                 if not bot.is_last_run() and not bot._route_config["run_shenk"]:
-                    bot._pather.traverse_nodes_fixed("ELDRITCH_SAVE_TP", bot._char)
+                    bot._pather.traverse_nodes_fixed("eldritch_save_tp", bot._char)
                 # shenk
                 if bot._route_config["run_shenk"]:
                     self.success = bot._pather.traverse_nodes(Location.SHENK_START, Location.SHENK_SAVE_DIST, bot._char)
@@ -297,7 +328,7 @@ class Bot:
                     bot._picked_up_items |= bot._pickit.pick_up_items(bot._char)
                     # in order to move away for items to have a clear tp, move to the end of the hall
                     if not bot.is_last_run():
-                        bot._pather.traverse_nodes_fixed("SHENK_SAVE_TP", bot._char)
+                        bot._pather.traverse_nodes_fixed("shenk_save_tp", bot._char)
                 wait(0.5, 0.6)
                 self.success = True
                 return
@@ -305,21 +336,29 @@ class Bot:
         self._start_run("run_shenk", run)
 
     def on_end_game(self):
+        self._pre_buffed = 0
         if self._health_manager.did_chicken() or self._death_manager.died():
+            Logger.info("End game while chicken or death happened. Checking where we are at.")
             # This is a tricky state as we send different actions in different threads.
             # Chicken could have been succesfull which means we are at hero selection screen
             # Chicken could have been unsuccesfull, which means we are naked in a5_town
-            time.sleep(3) # just to take our time here
+            # Chicken could have been unsuccesfull, but it already stopped main thread and death manager did not have time to check death -> death screen
+            time.sleep(1.5)
             is_loading = True
             while is_loading:
                 is_loading = self._template_finder.search("LOADING", self._screen.grab())[0]
                 time.sleep(0.5)
+            time.sleep(1.5)
             # Okay we are sure we are not in loading screen, let's check if we are in hero selection or in a5 town
             img = self._screen.grab()
             if self._template_finder.search("A5_TOWN_1", img)[0]:
+                Logger.info("We are at town, save and exit game.")
                 self._ui_manager.save_and_exit()
             elif self._template_finder.search("D2_LOGO_HS", img)[0]:
-                pass # no need to do anything
+                Logger.info("We are at hero selection.")
+            elif self._death_manager.handle_death_screen():
+                Logger.info("For some reason we were still at death screen, but Death Manager should have sent us back to town. save and exit game.")
+                self._ui_manager.save_and_exit()
             else:
                 Logger.error("Could not determine location after chicken / death. Can not continue...")
                 os._exit(1)
@@ -336,21 +375,21 @@ class Bot:
         if self._config.general["randomize_runs"]:
             self.shuffle_runs()
         wait(0.2, 0.5)
-        self.trigger("create_game")
+        self.trigger_or_stop("create_game")
 
     def on_end_run(self):
         success = self._char.tp_town()
         self._tps_left -= 1
         if success:
-            success, _= self._template_finder.search_and_wait("A5_TOWN_1", time_out=10)
+            success, _= self._template_finder.search_and_wait(["A5_TOWN_1", "A5_TOWN_0"], time_out=10)
             if success:
                 self._tp_is_up = True
                 self._curr_location = Location.A5_TOWN_START
-                self.trigger("maintenance")
+                self.trigger_or_stop("maintenance")
             else:
-                self.trigger("end_game")
+                self.trigger_or_stop("end_game")
         else:
-            self.trigger("end_game")
+            self.trigger_or_stop("end_game")
 
 
 if __name__ == "__main__":

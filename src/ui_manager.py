@@ -10,10 +10,8 @@ import itertools
 import os
 import numpy as np
 from logger import Logger
-from utils.misc import wait, cut_roi
+from utils.misc import wait, cut_roi, color_filter
 from config import Config
-from utils.misc import color_filter
-
 
 class UiManager():
     """Everything that is clicking on some static 2D UI or is checking anything in regard to it should be placed here."""
@@ -38,8 +36,8 @@ class UiManager():
         # wait(0.3, 0.4)
         pos_wp_btn = (self._config.ui_pos["wp_first_btn_x"], self._config.ui_pos["wp_first_btn_y"] + self._config.ui_pos["wp_btn_height"] * idx)
         x, y = self._screen.convert_screen_to_monitor(pos_wp_btn)
-        mouse.move(x, y, randomize=12)
-        wait(0.3, 0.4)
+        mouse.move(x, y, randomize=[110, 20], delay_factor=[0.9, 1.4])
+        wait(0.4, 0.5)
         mouse.click(button="left")
 
     def can_teleport(self) -> bool:
@@ -134,25 +132,29 @@ class UiManager():
         start = time.time()
         while (time.time() - start) < 15:
             keyboard.send("esc")
-            wait(0.1)
+            wait(0.3)
             exit_btn_pos = (self._config.ui_pos["save_and_exit_x"], self._config.ui_pos["save_and_exit_y"])
             x_m, y_m = self._screen.convert_screen_to_monitor(exit_btn_pos)
-            away_x_m, away_y_m = self._screen.convert_screen_to_monitor((200, 450))
-            while self._template_finder.search_and_wait(["SAVE_AND_EXIT_NO_HIGHLIGHT","SAVE_AND_EXIT_HIGHLIGHT"], roi=self._config.ui_roi["save_and_exit"], time_out=1.5)[0]:
+            # TODO: Add hardcoded coordinates to ini file
+            away_x_m, away_y_m = self._screen.convert_abs_to_monitor((int(-250 * self._config.scale), 0))
+            templates = ["SAVE_AND_EXIT_NO_HIGHLIGHT","SAVE_AND_EXIT_HIGHLIGHT"]
+            while self._template_finder.search_and_wait(templates, roi=self._config.ui_roi["save_and_exit"], time_out=1.5, take_ss=False)[0]:
                 delay = [0.9, 1.1]
                 if does_chicken:
                     delay = [0.3, 0.4]
-                mouse.move(x_m, y_m, randomize=[60, 10], delay_factor=delay)
+                mouse.move(x_m, y_m, randomize=[38, 7], delay_factor=delay)
                 wait(0.03, 0.06)
-                mouse.click(button="left")
+                mouse.press(button="left")
+                wait(0.06, 0.1)
+                mouse.release(button="left")
                 if does_chicken:
                     # lets just try again just in case
                     wait(0.05, 0.08)
-                    mouse.click(button="left")
-                wait(0.1, 0.2)
-                mouse.move(away_x_m, away_y_m, randomize=100, delay_factor=[0.6, 0.9])
+                    # mouse.click(button="left")
+                wait(1.5, 2.0)
+                mouse.move(away_x_m, away_y_m, randomize=40, delay_factor=[0.6, 0.9])
                 wait(0.1, 0.5)
-                return True
+            return True
         return False
 
     def start_game(self) -> bool:
@@ -178,12 +180,11 @@ class UiManager():
                 Logger.debug(f"Found Play Btn ({mode_info}) -> clicking it")
                 if mode_info == "online":
                     Logger.warning("You are creating a game in online mode!")
-                mouse.move(x, y, randomize=5)
+                mouse.move(x, y, randomize=[50, 9], delay_factor=[1.0, 1.8])
+                wait(0.1, 0.15)
                 mouse.click(button="left")
                 break
             time.sleep(3.0)
-
-
 
         difficulty=self._config.general["difficulty"].lower()
         Logger.debug(f"Searching for {difficulty} Btn...")
@@ -200,10 +201,10 @@ class UiManager():
                 Logger.debug("Could not find btn, try from start again")
                 return self.start_game()
 
-            # sanity x y check. Note: not checking y range as it often detects nightmare button as hell btn, not sure why
             x, y = self._screen.convert_screen_to_monitor((self._config.ui_pos[f"{difficulty}_x"], self._config.ui_pos[f"{difficulty}_y"]))
             Logger.debug(f"Found {difficulty} Btn -> clicking it")
-            mouse.move(x, y, randomize=5)
+            mouse.move(x, y, randomize=[50, 9], delay_factor=[1.0, 1.8])
+            wait(0.15, 0.2)
             mouse.click(button="left")
             break
 
@@ -213,7 +214,7 @@ class UiManager():
         if server_issue:
             Logger.warning("Server connection issue. waiting 20s")
             x, y = self._screen.convert_screen_to_monitor((self._config.ui_pos["issue_occured_ok_x"], self._config.ui_pos["issue_occured_ok_y"]))
-            mouse.move(x, y, randomize=5)
+            mouse.move(x, y, randomize=10, delay_factor=[2.0, 4.0])
             mouse.click(button="left")
             wait(1, 2)
             keyboard.send("esc")
@@ -277,7 +278,8 @@ class UiManager():
         # TODO: Do not stash portal scrolls and potions but throw them out of inventory on the ground!
         #       then the pickit check for potions and belt free can also be removed
         Logger.debug("Searching for inventory gold btn...")
-        if not self._template_finder.search_and_wait("INVENTORY_GOLD_BTN", roi=self._config.ui_roi["gold_btn"], time_out=20)[0]:
+        found, pos_gold_btn = self._template_finder.search_and_wait("INVENTORY_GOLD_BTN", roi=self._config.ui_roi["gold_btn"], time_out=20)
+        if not found:
             Logger.error("Could not determine to be in stash menu. Continue...")
             return
         Logger.debug("Found inventory gold btn")
@@ -286,9 +288,19 @@ class UiManager():
         stash_btn_width = self._config.ui_pos["stash_btn_width"]
         next_stash_pos = (personal_stash_pos[0] + stash_btn_width * self._curr_stash, personal_stash_pos[1])
         x_m, y_m = self._screen.convert_screen_to_monitor(next_stash_pos)
-        mouse.move(x_m, y_m, randomize=15)
+        mouse.move(x_m, y_m, randomize=[30, 7], delay_factor=[1.0, 1.5])
+        wait(0.2, 0.3)
         mouse.click(button="left")
         wait(0.3, 0.4)
+        # stash gold
+        x, y = self._screen.convert_screen_to_monitor(pos_gold_btn)
+        mouse.move(x, y, randomize=4)
+        wait(0.1, 0.15)
+        mouse.press(button="left")
+        wait(0.25, 0.35)
+        mouse.release(button="left")
+        wait(0.4, 0.6)
+        keyboard.send("enter") #if stash already full of gold just nothing happens -> gold stays on char -> no popup window
         # stash stuff
         keyboard.send('ctrl', do_release=False)
         for column, row in itertools.product(range(num_loot_columns), range(4)):
@@ -296,24 +308,25 @@ class UiManager():
             slot_pos, slot_img = self._get_slot_pos_and_img(img, column, row)
             if self._slot_has_item(slot_img):
                 x_m, y_m = self._screen.convert_screen_to_monitor(slot_pos)
-                mouse.move(x_m, y_m, randomize=5)
-                wait(0.1, 0.15)
+                mouse.move(x_m, y_m, randomize=10, delay_factor=[1.0, 1.3])
+                wait(0.2, 0.3)
                 mouse.press(button="left")
                 wait(0.25, 0.35)
                 mouse.release(button="left")
-                wait(0.4, 0.6)
+                wait(0.4, 0.5)
         keyboard.send('ctrl', do_press=False)
         Logger.debug("Check if stash is full")
         time.sleep(0.6)
         # move mouse away from inventory, for some reason it was sometimes included in the grabed img
         top_left_slot = (self._config.ui_pos["inventory_top_left_slot_x"], self._config.ui_pos["inventory_top_left_slot_y"])
-        move_to = (top_left_slot[0] - 250, top_left_slot[1] - 250)
+        move_to = (top_left_slot[0] - 300, top_left_slot[1] - 200)
         x, y = self._screen.convert_screen_to_monitor(move_to)
-        mouse.move(x, y, randomize=3)
+        mouse.move(x, y, randomize=40, delay_factor=[1.0, 1.5])
         img = self._screen.grab()
         if self._inventory_has_items(img, num_loot_columns):
             Logger.info("Stash page is full, selecting next stash")
-            cv2.imwrite("debug_info_inventory_not_empty.png", img)
+            if self._config.general["info_screenshots"]:
+                cv2.imwrite("./info_screenshots/debug_info_inventory_not_empty_" + time.strftime("%Y%m%d_%H%M%S") + ".png", img)
             self._curr_stash += 1
             if self._curr_stash > 3:
                 Logger.error("All stash is full, quitting")
@@ -345,7 +358,7 @@ class UiManager():
         keyboard.press("shift")
         for pos in pot_positions:
             x, y = self._screen.convert_screen_to_monitor(pos)
-            mouse.move(x, y, randomize=5)
+            mouse.move(x, y, randomize=9, delay_factor=[1.0, 1.5])
             wait(0.2, 0.3)
             mouse.click(button="left")
             wait(0.3, 0.4)
@@ -353,7 +366,14 @@ class UiManager():
         wait(0.2, 0.25)
         keyboard.send(self._config.char["inventory_screen"])
 
-    def repair_and_fill_up_tp(self, close_when_done:bool = False) -> bool:
+    def close_vendor_screen(self):
+        keyboard.send("esc")
+        # just in case also bring cursor to center and click
+        x, y = self._screen.convert_screen_to_monitor((self._config.ui_pos["center_x"], self._config.ui_pos["center_y"]))
+        mouse.move(x, y, randomize=25, delay_factor=[1.0, 1.5])
+        mouse.click(button="left")
+
+    def repair_and_fill_up_tp(self) -> bool:
         """
         Repair and fills up TP buy selling tomb and buying. Vendor inventory needs to be open!
         :return: Bool if success
@@ -362,44 +382,37 @@ class UiManager():
         if not found:
             return False
         x, y = self._screen.convert_screen_to_monitor(pos_repair_abs)
-        mouse.move(x, y, randomize=7)
+        mouse.move(x, y, randomize=12, delay_factor=[1.0, 1.5])
         wait(0.1, 0.15)
         mouse.click(button="left")
         wait(0.1, 0.15)
         x, y = self._screen.convert_screen_to_monitor((self._config.ui_pos["vendor_misc_x"], self._config.ui_pos["vendor_misc_y"]))
-        mouse.move(x, y, randomize=5)
+        mouse.move(x, y, randomize=[20, 6], delay_factor=[1.0, 1.5])
         wait(0.1, 0.15)
         mouse.click(button="left")
         wait(0.5, 0.6)
-        found, pos_tp_inventory = self._template_finder.search_and_wait("TP_TOMB", roi=self._config.ui_roi["inventory"], time_out=4)
+        found, pos_tp_inventory = self._template_finder.search_and_wait("TP_TOMB", roi=self._config.ui_roi["inventory"], time_out=3)
         if not found:
             return False
         x, y = self._screen.convert_screen_to_monitor(pos_tp_inventory)
         keyboard.send('ctrl', do_release=False)
-        mouse.move(x, y, randomize=4)
+        mouse.move(x, y, randomize=8, delay_factor=[1.0, 1.5])
         wait(0.1, 0.15)
         mouse.press(button="left")
         wait(0.25, 0.35)
         mouse.release(button="left")
         wait(0.5, 0.6)
         keyboard.send('ctrl', do_press=False)
-        found, pos_tp_inventory = self._template_finder.search_and_wait("TP_TOMB", roi=self._config.ui_roi["vendor_stash"], time_out=4)
+        found, pos_tp_inventory = self._template_finder.search_and_wait("TP_TOMB", roi=self._config.ui_roi["vendor_stash"], time_out=3)
         if not found:
             return False
         x, y = self._screen.convert_screen_to_monitor(pos_tp_inventory)
         keyboard.send('ctrl', do_release=False)
-        mouse.move(x, y, randomize=4)
+        mouse.move(x, y, randomize=8, delay_factor=[1.0, 1.5])
         wait(0.1, 0.15)
         mouse.click(button="right")
         wait(0.1, 0.15)
         keyboard.send('ctrl', do_press=False)
-        if close_when_done:
-            wait(0.1, 0.2)
-            keyboard.send("esc")
-            # just in case also bring cursor to center and click
-            x, y = self._screen.convert_screen_to_monitor((self._config.ui_pos["center_x"], self._config.ui_pos["center_y"]))
-            mouse.move(x, y, randomize=20)
-            mouse.click(button="left")
         return True
 
 
@@ -413,9 +426,4 @@ if __name__ == "__main__":
     screen = Screen(config.general["monitor"])
     template_finder = TemplateFinder(screen)
     ui_manager = UiManager(screen, template_finder)
-    ui_manager.repair_and_fill_up_tp()
-    wait(0.1, 0.2)
-    keyboard.send("esc")
-    # ui_manager.stash_all_items(6)
-    # ui_manager.use_wp(4, 1)
-    # ui_manager.fill_up_belt_from_inventory(10)
+    ui_manager.save_and_exit()

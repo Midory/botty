@@ -2,6 +2,7 @@ from item_finder import ItemFinder
 import time
 from utils.custom_mouse import mouse
 import keyboard
+import cv2
 from config import Config
 from char.i_char import IChar
 from logger import Logger
@@ -27,8 +28,14 @@ class PickIt:
         found_items = False
         keyboard.send(self._config.char["show_items"], do_press=True, do_release=False)
         time.sleep(1.0) # sleep needed here to give d2r time to display items on screen on keypress
+        #Creating a screenshot of the current loot
+        if self._config.general["loot_screenshots"]:
+            img = self._screen.grab()
+            cv2.imwrite("./loot_screenshots/info_debug_drop_" + time.strftime("%Y%m%d_%H%M%S") + ".png", img)
+            Logger.debug("Took a screenshot of current loot")
         start = time.time()
         time_out = False
+        picked_up_items = []
         while not time_out:
             if (time.time() - start) > 20:
                 time_out = True
@@ -55,30 +62,23 @@ class PickIt:
                     time.sleep(0.1)
                     mouse.click(button="left")
                     time.sleep(0.5)
-                    
-                    if found_items:
-                        try:
-                            runeLvl = int(closest_item.name.split('_')[1])
-                        except:
-                            runeLvl=0
-
-                    if found_items and ((runeLvl >= 23) or ("tt_" in closest_item.name)):
-                        
-                        if self._config.general["send_drops_to_discord"]:
-                            send_discord_thread = threading.Thread(target=send_discord, args=(closest_item.name,))
-                            send_discord_thread.daemon = True
-                            send_discord_thread.start()
-    
-                        if self._config.general["custom_discord_hook"] != "":
-                            send_discord_thread = threading.Thread(target=send_discord, args=(closest_item.name, self._config.general["custom_discord_hook"]))
-                            send_discord_thread.daemon = True
-                            send_discord_thread.start()
 
                     if self._ui_manager.is_overburdened():
                         Logger.warning("Inventory full, skipping pickit!")
                         # TODO: should go back to town and stash stuff then go back to picking up more stuff
                         #       but sm states are not fine enough for such a routine right now...
                         break
+                    else:
+                        # send log to discord
+                        if found_items and self._config.items[closest_item.name] == 2 and closest_item.name not in picked_up_items:
+                            if self._config.general["custom_discord_hook"] != "":
+                                send_discord_thread = threading.Thread(
+                                    target=send_discord,
+                                    args=(f"Botty just found: {closest_item.name}", self._config.general["custom_discord_hook"])
+                                )
+                                send_discord_thread.daemon = True
+                                send_discord_thread.start()
+                        picked_up_items.append(closest_item.name)
                 else:
                     char.move((x_m, y_m))
                     time.sleep(0.1)

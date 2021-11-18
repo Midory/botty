@@ -25,6 +25,14 @@ class Sorceress(IChar):
             wait(0.1, 0.13)
             mouse.click(button="right")
             wait(self._cast_duration)
+        if self._char_config["ts_available"]:
+            keyboard.send(self._skill_hotkeys["thunder_storm"])
+            wait(0.1, 0.13)
+            mouse.click(button="right")
+            wait(self._cast_duration)
+        wait(0.1, 0.13)
+        mouse.click(button="right")
+        wait(self._cast_duration)
         if self._char_config["frozen_armor_available"]:
             keyboard.send(self._skill_hotkeys["frozen_armor"])
             wait(0.1, 0.13)
@@ -33,42 +41,43 @@ class Sorceress(IChar):
         if self._char_config["cta_available"]:
             self._pre_buff_cta()
 
-    def _left_attack(self, cast_pos: Tuple[float, float], delay: float, spray: int = 10):
+    def _left_attack(self, cast_pos_abs: Tuple[float, float], delay: float, spray: int = 10):
         keyboard.send(self._char_config["stand_still"], do_release=False)
-        mouse.move(cast_pos[0], cast_pos[1])
-        keyboard.send(self._skill_hotkeys["skill_left"])
+        if self._skill_hotkeys["skill_left"]:
+            keyboard.send(self._skill_hotkeys["skill_left"])
         for _ in range(6):
-            x = cast_pos[0] + (random.random() * 2*spray - spray)
-            y = cast_pos[1] + (random.random() * 2*spray - spray)
-            mouse.move(x, y)
+            x = cast_pos_abs[0] + (random.random() * 2*spray - spray)
+            y = cast_pos_abs[1] + (random.random() * 2*spray - spray)
+            cast_pos_monitor = self._screen.convert_abs_to_monitor((x, y))
+            mouse.move(*cast_pos_monitor)
             mouse.click(button="left")
             wait(delay[0], delay[1])
         keyboard.send(self._char_config["stand_still"], do_press=False)
 
-    def _main_attack(self, cast_pos: Tuple[float, float], delay: float, spray: float = 10):
+    def _main_attack(self, cast_pos_abs: Tuple[float, float], delay: float, spray: float = 10):
         keyboard.send(self._skill_hotkeys["skill_right"])
-        x = cast_pos[0] + (random.random() * 2*spray - spray)
-        y = cast_pos[1] + (random.random() * 2*spray - spray)
-        mouse.move(x, y)
+        x = cast_pos_abs[0] + (random.random() * 2*spray - spray)
+        y = cast_pos_abs[1] + (random.random() * 2*spray - spray)
+        cast_pos_monitor = self._screen.convert_abs_to_monitor((x, y))
+        mouse.move(*cast_pos_monitor)
         mouse.click(button="right")
         wait(delay[0], delay[1])
 
     def kill_pindle(self) -> bool:
         delay = [0.2, 0.3]
         if self._config.char["static_path_pindle"]:
-            pindle_pos_abs = self._screen.convert_screen_to_abs(self._pather.get_fixed_path("PINDLE_END")[0])
+            pindle_pos_abs = self._screen.convert_screen_to_abs(self._config.path["pindle_end"][0])
         else:
             pindle_pos_abs = self._pather.find_abs_node_pos(104, self._screen.grab())
         if pindle_pos_abs is not None:
             cast_pos_abs = [pindle_pos_abs[0] * 0.9, pindle_pos_abs[1] * 0.9]
-            cast_pos_monitor = self._screen.convert_abs_to_monitor(cast_pos_abs)
             for _ in range(int(self._char_config["atk_len_pindle"])):
-                self._main_attack(cast_pos_monitor, delay, 15)
-                self._left_attack(cast_pos_monitor, delay, 15)
+                self._main_attack(cast_pos_abs, delay, 15)
+                self._left_attack(cast_pos_abs, delay, 15)
             wait(0.1, 0.15)
             # Move to items
             if self._config.char["static_path_pindle"]:
-                self._pather.traverse_nodes_fixed("PINDLE_END", self)
+                self._pather.traverse_nodes_fixed("pindle_end", self)
             else:
                 self._pather.traverse_nodes(Location.PINDLE_SAVE_DIST, Location.PINDLE_END, self, force_tp=True)
             return True
@@ -79,14 +88,13 @@ class Sorceress(IChar):
         pos_abs = self._pather.find_abs_node_pos(123, self._screen.grab())
         if pos_abs is not None:
             cast_pos_abs = [pos_abs[0] * 0.9, pos_abs[1] * 0.9]
-            cast_pos_monitor = self._screen.convert_abs_to_monitor(cast_pos_abs)
             for _ in range(int(self._char_config["atk_len_eldritch"])):
-                self._main_attack(cast_pos_monitor, delay, 90)
-                self._left_attack(cast_pos_monitor, delay, 90)
+                self._main_attack(cast_pos_abs, delay, 90)
+                self._left_attack(cast_pos_abs, delay, 90)
             wait(0.2, 0.3)
             # Move to items
             if self._config.char["static_path_eldritch"]:
-                self._pather.traverse_nodes_fixed("ELDRITCH_END", self)
+                self._pather.traverse_nodes_fixed("eldritch_end", self)
             else:
                 self._pather.traverse_nodes(Location.ELDRITCH_SAVE_DIST, Location.ELDRITCH_END, self, time_out=0.6, force_tp=True)
             return True
@@ -96,10 +104,9 @@ class Sorceress(IChar):
         delay = [0.2, 0.3]
         pos_abs = self._pather.find_abs_node_pos(149, self._screen.grab())
         cast_pos_abs = [pos_abs[0] * 0.9, pos_abs[1] * 0.9]
-        cast_pos_monitor = self._screen.convert_abs_to_monitor(cast_pos_abs)
         for _ in range(int(self._char_config["atk_len_shenk"])):
-            self._main_attack(cast_pos_monitor, delay, 90)
-            self._left_attack(cast_pos_monitor, delay, 90)
+            self._main_attack(cast_pos_abs, delay, 90)
+            self._left_attack(cast_pos_abs, delay, 90)
         wait(0.2, 0.3)
         # Move to items
         self._pather.traverse_nodes(Location.SHENK_SAVE_DIST, Location.SHENK_END, self, time_out=2.0, force_tp=True)
@@ -119,6 +126,6 @@ if __name__ == "__main__":
     t_finder = TemplateFinder(screen)
     pather = Pather(screen, t_finder)
     ui_manager = UiManager(screen, t_finder)
-    char = Sorceress(config.sorceress, config.char, screen, t_finder, ui_manager)
-    char.pre_buff()
-    # char.tp_town()
+    char = Sorceress(config.sorceress, config.char, screen, t_finder, ui_manager, pather)
+    # char.pre_buff()
+    char.tp_town()

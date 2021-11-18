@@ -5,12 +5,14 @@ from logger import Logger
 import cv2
 from typing import List, Tuple
 import requests
+import subprocess
+from version import __version__
 
 
-def send_discord(item_name, url:str = None):
-    if url is None:
-        url = "https://discord.com/api/webhooks/908071105372250213/puaS6gIYqYxTE-TBLAIs6_Qb6ZUwuygSeQfTQkpuXrSag5DPeV2gk0SctOjPy5qMHGeh"
-    data = {"content": f"Botty just found: {item_name}"}
+def send_discord(msg, url: str):
+    if not url:
+        return
+    data = {"content": f"{msg} (v{__version__})"}
     requests.post(url, json=data)
 
 def wait(min_seconds, max_seconds = None):
@@ -41,3 +43,7 @@ def color_filter(img, color_range):
     color_mask = cv2.inRange(hsv_img, color_range[0], color_range[1])
     filtered_img = cv2.bitwise_and(img, img, mask=color_mask)
     return color_mask, filtered_img
+
+def close_down_d2():
+    subprocess.call(["taskkill","/F","/IM","D2R.exe"])
+    subprocess.call(["taskkill","/F","/IM","Battle.net.exe"])

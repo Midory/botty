@@ -8,21 +8,6 @@ And please. I urge you to actually read that README! It will make your life a lo
 
 [![Watch the video](assets/docs/video_thumbnail.png)](https://vimeo.com/641410429)
 
-## What it does
-- Run Pindle, Eldtritch, Shenk
-- Pickit with per item config
-- Stash picked up items (using all 4 stashes)
-- Prebuff
-- Revive Merc if dead
-- Heal at Malah if needed
-- Shop for tps and repair at Lazurk
-- Take potions (health and mana) and chicken if in trouble during fights
-- Check for death. In this case start another game and pick up corpse.
-- Supported builds: Sorceress (Blizz, Light, Meteor), Hammerdin
-- Auto Settings and Debug Color Mode to easily verify your settings
-- Runs in Hyper-V
-- Highly configurable, consult the param.ini section for more details
-
 ## Getting started
 ### 1) Graphics and Gameplay Settings
 All settings will automatically be set when you execute `run.exe` and press the hotkey for "Adjust D2R settings" (default f9). Note that D2R should not run during this process, or if it does you will have to restart afterwards. It is not a 100% thing, in rare cases you might still have to fiddle around with your brightness. I suggest using the "Color Test Mode" to verify your settings.</br>
@@ -64,15 +49,20 @@ run_shenk=0
  [general]                      | Descriptions                                
 --------------------------------|---------------------------------------------
 monitor | Select on which monitor D2R is running in case multiple are available
+res | Resolution settings can be any of [1920_1080, 1280_720]
+offset_top | Your D2R windows offset from top of the screen (including the window bar). For fullscreen leave at 0.
+offset_left | Your D2R window offset from left of screen. For fullscreen leave at 0.
 min_game_length_s | Games must have at least this length, will wait in hero selection for if game is too quick (to avoid server connection issues)
+max_game_length_s | Botty will attempt to stop whatever its doing and try to restart a new game. Note if this fails, botty will attempt to shut down D2R and Bnet
 exit_key | Pressing this key (anywhere), will force botty to shut down
 resume_key | After starting the exe botty will wait for this keypress to atually start botting away
 color_checker_key | Pressing this key will start a debug mode to check if the color filtering works with your settings. It also includes the item search and marks items it would pick up with red circles
 logger_lvl | Can be any of [info, debug] and determines how much output you see on the command line
 randomize_runs | If 0, the order will always be pindle -> eldritch/shenk. If 1 the order will be random.
 difficulty | Set to `normal` `nightmare` or `hell` for game difficulty 
-send_drops_to_discord | If 1 sends your drops to the discord channel "drop-log"
 custom_discord_hook | Add your own discord hook here to get messages about drops and in case botty got stuck and can not resume
+info_screenshots | If 1, the bot takes a screenshot with timestamp on every stuck / chicken / timeout / inventory full event. This is 1 by Default, so remember to clean up the folder every once in a while 
+loot_screenshots | If 1, the bot takes a screenshot with timestamp everytime he presses show_items button and saves it to loot_screenshots folder. Remember to clear them once in a while...
 
  [routes]                       | Descriptions                                
 --------------------------------|---------------------------------------------
@@ -104,6 +94,8 @@ potion1 | Hotkey to take poition in slot 1
 potion2 | Hotkey to take poition in slot 2
 potion3 | Hotkey to take poition in slot 3
 potion4 | Hotkey to take poition in slot 4
+es_available | 0: no energy shield is used on sorc, 1: sorc uses energy shield (must provide correct hotkey in [sorceress]!)
+ts_available | 0: no thunderstorm is used on sorc, 1: sorc uses thunder storm (must provide correct hotkey in [sorceress]!)
 cta_available | 0: no cta available, 1: cta is available and should be used during prebuff
 weapon_switch | Hotkey for "weapon switch" (only needed if cta_available=1)
 battle_order | Hotkey for battle order from cta (only needed if cta_available=1)
@@ -115,7 +107,8 @@ teleport | Hotkey for teleport
 skill_left | Hotkey for skill that is used on left mouse btn (e.g. Glacial Spike)
 skill_right | Hotkey for skill that is used on right mouse btn (e.g. Blizzard)
 forzen_armor | Hotkey for frozen armor (or any of the other armors)
-telekinesis | Hotkey for telekinesis
+energy_shield | Hotkey for energy shield, only used if es_available is 1
+thunder_storm | Hotkey for thunder storm, only used if ts_available is 1
 
  [hammerdin]                    | Descriptions                                
 --------------------------------|---------------------------------------------
@@ -127,7 +120,7 @@ blessed_hammer | Hotkey for Blessed Hammer
 
  [items]                        | Descriptions                                
 --------------------------------|---------------------------------------------
-item_type | Select "1" if item should be picked up, "0" if not.
+item_type | 0: Item will not be picked up. 1: Item will be picked up. 2: Item will be picked up and a discord message will be sent.
 
 ## Support this project
-This project is free. Support it by contributing in any technical way, giving feedback, PRs or by submitting issues. That being said, I am not above accepting some pixel currency :) So if you want to send some fg my way to keep my dopamine high, here is my d2jsp: aeon0 (https://forums.d2jsp.org/user.php?i=768967).
+This project is free. Support it by contributing in any technical way, giving feedback, bug reports or submitting PRs.

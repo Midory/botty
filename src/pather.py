@@ -60,7 +60,7 @@ class Pather:
             4: {"A5_TOWN_1": (-701, 400), "A5_TOWN_2": (440, 169), "A5_TOWN_3": (-400, -208), "A5_TOWN_4": (243, -244)},
             5: {"A5_TOWN_2": (555-100, 429-100), "A5_TOWN_3": (-285-100, 51-100), "A5_TOWN_4": (358-100, 15-100)},
             6: {"A5_TOWN_3": (-775-100, 382-120), "A5_TOWN_4": (-132-100, 346-120), "A5_TOWN_5": (80-100, -240-120), "A5_TOWN_6": (560-100, 211-120)},
-            8: {"A5_TOWN_5": (-323+30, 192-200), "A5_TOWN_7": (867+30, 69-200)},
+            8: {"A5_TOWN_6": (190, 440), "A5_TOWN_5": (-323+30, 192-200), "A5_TOWN_7": (867+30, 69-200)},
             9: {"A5_TOWN_5": (-611, 250), "A5_TOWN_7": (579, 127)},
             10: {"A5_TOWN_4": (-708, 87), "A5_TOWN_6": (-16, -48), "A5_TOWN_8": (482, 196)},
             11: {"A5_TOWN_6": (-448, -322), "A5_TOWN_8": (50, -78), "A5_TOWN_9": (11, 346)},
@@ -119,21 +119,12 @@ class Pather:
             (Location.SHENK_START, Location.SHENK_SAVE_DIST): [140, 141, 142, 143, 144, 145, 146, 147, 148],
             (Location.SHENK_SAVE_DIST, Location.SHENK_END): [149],
         }
-        self._fixed_tele_path = {
-            # to move to boss at save distant location
-            "PINDLE_SAVE_DIST": [(1382, 53), (1685, 105), (1440, 132)],
-            "ELDRITCH_SAVE_DIST": [(978, 95), (845, 109)],
-            # to move to boss location
-            "PINDLE_END": [(1555, 261)],
-            "ELDRITCH_END":  [(1012, 42)],
-            # to move away from items
-            "ELDRITCH_SAVE_TP": [(960, 800)],
-            "PINDLE_SAVE_TP": [(600, 40)],
-            "SHENK_SAVE_TP": [(656, 323)],
-        }
 
-    def get_fixed_path(self, key: str):
-        return self._fixed_tele_path[key]
+    def _get_scaled_node(self, key: int, template: str):
+        return (
+            int(self._nodes[key][template][0] * self._config.scale),
+            int(self._nodes[key][template][1] * self._config.scale)
+        )
 
     def _display_all_nodes_debug(self, filter: str = None):
         while 1:
@@ -147,7 +138,7 @@ class Pather:
                                 # Get reference position of template in abs coordinates
                                 ref_pos_abs = self._screen.convert_screen_to_abs(ref_pos_screen)
                                 # Calc the abs node position with the relative coordinates (relative to ref)
-                                node_pos_rel = self._nodes[node_idx][template_type]
+                                node_pos_rel = self._get_scaled_node(node_idx, template_type)
                                 node_pos_abs = self._convert_rel_to_abs(node_pos_rel, ref_pos_abs)
                                 node_pos_abs = self._adjust_abs_range_to_screen(node_pos_abs)
                                 x, y = self._screen.convert_abs_to_screen(node_pos_abs)
@@ -165,7 +156,7 @@ class Pather:
         return (rel_loc[0] + pos_abs[0], rel_loc[1] + pos_abs[1])
 
     def traverse_nodes_fixed(self, key: str, char):
-        path = self._fixed_tele_path[key]
+        path = self._config.path[key]
         for pos in path:
             x_m, y_m = self._screen.convert_screen_to_monitor(pos)
             x_m += int(random.random() * 6 - 3)
@@ -209,7 +200,7 @@ class Pather:
                 # Get reference position of template in abs coordinates
                 ref_pos_abs = self._screen.convert_screen_to_abs(ref_pos_screen)
                 # Calc the abs node position with the relative coordinates (relative to ref)
-                node_pos_rel = node[template_type]
+                node_pos_rel = self._get_scaled_node(node_idx, template_type)
                 node_pos_abs = self._convert_rel_to_abs(node_pos_rel, ref_pos_abs)
                 node_pos_abs = self._adjust_abs_range_to_screen(node_pos_abs)
                 return node_pos_abs
@@ -243,7 +234,8 @@ class Pather:
                         # because of all the spells and monsters it often can not determine the final template
                         # Don't want to spam the log with errors in this case because it most likely worked out just fine
                         if time_out > 1.5:
-                            cv2.imwrite("info_pather_got_stuck.png", img)
+                            if self._config.general["info_screenshots"]:
+                                cv2.imwrite("./info_screenshots/info_pather_got_stuck_" + time.strftime("%Y%m%d_%H%M%S") + ".png", img)
                             Logger.error("Got stuck exit pather")
                         return False
                 node_pos_abs = self.find_abs_node_pos(node_idx, img)
@@ -273,6 +265,6 @@ if __name__ == "__main__":
     pather = Pather(screen, t_finder)
     ui_manager = UiManager(screen, t_finder)
     char = Sorceress(config.sorceress, config.char, screen, t_finder, ui_manager, pather)
-    # pather.traverse_nodes_fixed("PINDLE", char)
-    pather.traverse_nodes(Location.A5_STASH, Location.LARZUK, char)
+    pather.traverse_nodes_fixed("pindle_save_dist", char)
+    # pather.traverse_nodes(Location.A5_STASH, Location.LARZUK, char)
     # pather._display_all_nodes_debug(filter="A5_TOWN")

@@ -10,21 +10,27 @@ class Config:
         elif section in self._config:
             return self._config[section][key]
         else:
-            return self._ui_config[section][key]
+            return self._game_config[section][key]
 
-    def __init__(self):
+    def __init__(self, print_warnings: bool = False):
+        # print_warnings, what a hack... here it is, not making the effort
+        # passing a single config instance through bites me in the ass
+        self._print_warnings = print_warnings
         self._config = configparser.ConfigParser()
         self._config.read('params.ini')
-        self._ui_config = configparser.ConfigParser()
-        self._ui_config.read('ui.ini')
+        self._game_config = configparser.ConfigParser()
+        self._game_config.read('game.ini')
         self._custom = configparser.ConfigParser()
-        if os.path.exists('custom.ini'):
-             self._custom.read('custom.ini')
+        if os.environ.get('RUN_ENV') != "test" and os.path.exists('custom.ini'):
+            self._custom.read('custom.ini')
 
         self.general = {
             "monitor": int(self._select_val("general", "monitor")),
             "res": self._select_val("general", "res"),
+            "offset_top": int(self._select_val("general", "offset_top")),
+            "offset_left": int(self._select_val("general", "offset_left")),
             "min_game_length_s": float(self._select_val("general", "min_game_length_s")),
+            "max_game_length_s": float(self._select_val("general", "max_game_length_s")),
             "exit_key": self._select_val("general", "exit_key"),
             "resume_key": self._select_val("general", "resume_key"),
             "auto_settings_key": self._select_val("general", "auto_settings_key"),
@@ -32,8 +38,9 @@ class Config:
             "logg_lvl": self._select_val("general", "logg_lvl"),
             "randomize_runs": bool(int(self._select_val("general", "randomize_runs"))),
             "difficulty": self._select_val("general", "difficulty"),
-            "send_drops_to_discord": bool(int(self._select_val("general", "send_drops_to_discord"))),
             "custom_discord_hook": self._select_val("general", "custom_discord_hook"),
+            "info_screenshots": bool(int(self._select_val("general", "info_screenshots"))),
+            "loot_screenshots": bool(int(self._select_val("general", "loot_screenshots"))),
         }
 
         self.routes = {}
@@ -58,6 +65,7 @@ class Config:
             "potion3": self._select_val("char", "potion3"),
             "potion4": self._select_val("char", "potion4"),
             "es_available": bool(int(self._select_val("char", "es_available"))),
+            "ts_available": bool(int(self._select_val("char", "ts_available"))),
             "cta_available": bool(int(self._select_val("char", "cta_available"))),
             "frozen_armor_available": bool(int(self._select_val("char", "frozen_armor_available"))),            
             "weapon_switch": self._select_val("char", "weapon_switch"),
@@ -82,28 +90,60 @@ class Config:
 
         self.items = {}
         for key in self._config["items"]:
-            self.items[key] = bool(int(self._select_val("items", key)))
+            self.items[key] = int(self._select_val("items", key))
+            item_folder = "items" if self.general["res"] == "1920_1080" else "items_1280_720"
+            if self.items[key] and not os.path.exists(f"./assets/{item_folder}/{key}.png") and self._print_warnings:
+                print(f"Warning: You activated {key} in pickit, but there is no asset for {self.general['res']}")
 
         self.colors = {}
-        for key in self._ui_config["colors"]:
+        for key in self._game_config["colors"]:
             self.colors[key] = np.split(np.array([int(x) for x in self._select_val("colors", key).split(",")]), 2)
 
-        self.res = {
-            "scale": 1.0 if self.general["res"] == "1920_1080" else 0.666667,
-        }
+        self.scale = 1.0 if self.general["res"] == "1920_1080" else 0.666667
 
         self.ui_pos = {}
-        for key in self._ui_config["ui_pos_1920_1080"]:
-            self.ui_pos[key] = int(round(float(self._select_val("ui_pos_1920_1080", key)) * self.res["scale"]))
+        for key in self._game_config["ui_pos_1920_1080"]:
+            self.ui_pos[key] = int(round(float(self._select_val("ui_pos_1920_1080", key)) * self.scale))
 
         self.ui_roi = {}
-        for key in self._ui_config["ui_roi_1920_1080"]:
-            self.ui_roi[key] = np.array([int(round(float(x) * self.res["scale"])) for x in self._select_val("ui_roi_1920_1080", key).split(",")])
+        for key in self._game_config["ui_roi_1920_1080"]:
+            self.ui_roi[key] = np.array([int(round(float(x) * self.scale)) for x in self._select_val("ui_roi_1920_1080", key).split(",")])
+
+        self.path = {}
+        for key in self._game_config["path"]:
+            self.path[key] = np.reshape(np.array([int(round(float(x) * self.scale)) for x in self._select_val("path", key).split(",")]), (-1, 2))
+
 
 
 if __name__ == "__main__":
     config = Config()
 
-    for k in config.ui_pos:
-        x = config.ui_pos[k]
-        print(f"{k}={x}")
+    # for k in config.ui_pos:
+    #     x = config.ui_pos[k]
+    #     print(f"{k}={x}")
+
+    from pathlib import Path
+    import cv2
+
+    for k in config.items:
+        if not os.path.exists(f"./assets/items/{k}.png"):
+            print(f"Template not found: {k}")
+            # base_name = k.split("_")[2:]
+            # attrib = k.split("_")[0]
+            # base_name = '_'.join(base_name)
+            # if attrib == "uniq":
+            #     # print(f"{base_name}")
+            #     for path in Path("./assets/items").glob(f"*_{base_name}.png"):
+            #         print(k)
+            #         img = cv2.imread(str(path))
+            #         cv2.imwrite(f"./assets/items/{k}.png", img)
+            # else:
+            #     print(f"{attrib}_{base_name}=1")
+    
+    for filename in os.listdir(f'assets/items'):
+        filename = filename.lower()
+        if filename.endswith('.png'):
+            item_name = filename[:-4]
+            blacklist_item = item_name.startswith("bl__")
+            if item_name not in config.items:
+                print(f"Config not found for: " + filename)
