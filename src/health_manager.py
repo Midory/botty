@@ -43,7 +43,7 @@ class HealthManager:
                 key = f"potion{i+1}"
                 if merc:
                     Logger.debug(f"Give {potion_type} potion in slot {i+1} to merc")
-                    keyboard.send(f"left shift + {self._config.char[key]}")
+                    #keyboard.send(f"left shift + {self._config.char[key]}")
                 else:
                     Logger.debug(f"Drink {potion_type} potion in slot {i+1}")
                     keyboard.send(self._config.char[key])
@@ -103,7 +103,7 @@ class HealthManager:
                 # check health
                 health_percentage = self.get_health(img)
                 last_drink = time.time() - self._last_health
-                if health_percentage < self._config.char["take_health_potion"] and last_drink > 3.5:
+                if health_percentage <= self._config.char["take_health_potion"] and last_drink > 1:
                     self._drink_poition(img, "health")
                     self._last_health = time.time()
                 # give the chicken a 6 sec delay to give time for a healing pot and avoid endless loop of chicken

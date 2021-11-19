@@ -14,7 +14,7 @@ from health_manager import HealthManager
 from death_manager import DeathManager
 from npc_manager import NpcManager, Npc
 from pickit import PickIt
-from utils.misc import kill_thread, wait
+from utils.misc import kill_thread, wait, send_discord
 import keyboard
 import threading
 import time
@@ -74,6 +74,7 @@ class Bot:
             { 'trigger': 'end_game', 'source': ['a5_town', 'shenk', 'pindle', 'end_run'], 'dest': 'hero_selection', 'before': "on_end_game"},
         ]
         self.machine = Machine(model=self, states=self._states, initial="hero_selection", transitions=self._transitions, queued=True)
+        self.game_count = 0
 
     def draw_graph(self):
         # Draw the whole graph, graphviz binaries must be installed and added to path for this!
@@ -125,7 +126,9 @@ class Bot:
             if delay > 0.5:
                 Logger.info(f"Delay game creation for {delay:.2f} s")
                 wait(delay, delay + 5.0)
-        Logger.info("Start new game")
+        self.game_count = self.game_count + 1        
+        Logger.info("Start game {self.game_count}")
+        send_discord("Start game {self.game_count}", self._config.general["custom_discord_hook"])
         self._timer = time.time()
         self._template_finder.search_and_wait("D2_LOGO_HS")
         self._ui_manager.start_game()
